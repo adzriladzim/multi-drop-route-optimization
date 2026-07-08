@@ -87,14 +87,84 @@ def heuristic_euclidean(a: Location, b: Location) -> float:
     return euclidean_distance(a, b)
 
 
-class DeliveryGraph:
+class Graph:
+    """
+    Representasi graph umum untuk pengujian algoritma pencarian rute.
+    Mendukung koordinat node (x, y) dan penambahan edge manual.
+    """
+
+    def __init__(self):
+        self.nodes = {}       # name -> (x, y)
+        self.edges = {}       # name -> list of (neighbor, weight)
+        self.locations = {}   # name -> Location object (untuk kompatibilitas)
+
+    def add_node(self, name, x, y, demand=0, type="drop_point", label=None):
+        self.nodes[name] = (x, y)
+        if name not in self.edges:
+            self.edges[name] = []
+        # Untuk kompatibilitas dengan DeliveryGraph.locations
+        self.locations[name] = Location(
+            id=name,
+            name=str(label if label is not None else name),
+            type=type,
+            x=float(x),
+            y=float(y),
+            demand=demand
+        )
+
+    def add_edge(self, node_a, node_b, weight=None):
+        if node_a not in self.nodes or node_b not in self.nodes:
+            raise ValueError("Kedua node harus ditambahkan terlebih dahulu.")
+        if weight is None:
+            weight = self.euclidean_distance(node_a, node_b)
+        
+        # Simpan adjacency list
+        # Update jika edge sudah ada, jika tidak tambahkan
+        self.edges[node_a] = [e for e in self.edges[node_a] if e[0] != node_b] + [(node_b, weight)]
+        self.edges[node_b] = [e for e in self.edges[node_b] if e[0] != node_a] + [(node_a, weight)]
+
+    def get_nodes(self) -> List:
+        return list(self.nodes.keys())
+
+    def get_neighbors(self, node) -> List[Tuple]:
+        return self.edges.get(node, [])
+
+    def get_position(self, node) -> Tuple[float, float]:
+        if node not in self.nodes:
+            raise KeyError(f"Node {node} tidak ditemukan.")
+        return self.nodes[node]
+
+    def get_edge_cost(self, node_a, node_b) -> float:
+        for neighbor, weight in self.edges.get(node_a, []):
+            if neighbor == node_b:
+                return weight
+        return float("inf")
+
+    def euclidean_distance(self, node_a, node_b) -> float:
+        x1, y1 = self.get_position(node_a)
+        x2, y2 = self.get_position(node_b)
+        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+
+class DeliveryGraph(Graph):
     """
     Wrapper di atas networkx.Graph yang merepresentasikan jaringan
     depot + titik pengiriman sebagai complete graph berbobot Euclidean.
     """
 
     def __init__(self, locations: List[Location]):
-        self.locations: Dict[int, Location] = {loc.id: loc for loc in locations}
+        super().__init__()
+        # Load locations ke Graph parent
+        for loc in locations:
+            self.add_node(loc.id, loc.x, loc.y, demand=loc.demand, type=loc.type, label=loc.name)
+        
+        # Build complete graph (tetangga untuk semua node)
+        ids = self.get_nodes()
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                w = self.euclidean_distance(ids[i], ids[j])
+                self.add_edge(ids[i], ids[j], w)
+
         self.depot_id = next(loc.id for loc in locations if loc.type == "depot")
         self.graph = nx.Graph()
         self._build()
@@ -106,11 +176,10 @@ class DeliveryGraph:
         ids = list(self.locations.keys())
         for i in range(len(ids)):
             for j in range(i + 1, len(ids)):
-                a, b = self.locations[ids[i]], self.locations[ids[j]]
-                w = euclidean_distance(a, b)
-                self.graph.add_edge(a.id, b.id, weight=w)
+                w = self.euclidean_distance(ids[i], ids[j])
+                self.graph.add_edge(ids[i], ids[j], weight=w)
 
-    # ---- API yang enak dipakai algorithms.py (A* / Greedy) teman kamu ----
+    # ---- API yang enak dipakai algorithms.py (A* / Greedy) ----
 
     def neighbors(self, node_id: int) -> List[int]:
         return list(self.graph.neighbors(node_id))
@@ -164,8 +233,7 @@ class DeliveryGraph:
 
 
 def build_graph_from_csv(path: str) -> DeliveryGraph:
-    """Shortcut: langsung load CSV -> DeliveryGraph. Ini yang paling gampang
-    dipanggil dari algorithms.py atau app Streamlit teman kamu."""
+    """Shortcut: langsung load CSV -> DeliveryGraph."""
     return DeliveryGraph(load_locations_csv(path))
 
 
@@ -177,4 +245,4 @@ if __name__ == "__main__":
     print(f"Drop points: {g.drop_point_ids()}")
     print(f"Contoh cost(0,1): {g.cost(0, 1):.2f}")
     print(f"Contoh heuristic(0,1): {g.heuristic(0, 1):.2f}")
-    print(f"Triangle inequality (consistency) terbukti: {g.verify_triangle_inequality()}")
+    print(f"Triangle inequality (consistency) terbukti: {g.verify_triangle_inequality()}")

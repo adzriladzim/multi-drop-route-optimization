@@ -1,0 +1,7 @@
+streamlit
+fastapi
+uvicorn
+networkx
+matplotlib
+pandas
+requests

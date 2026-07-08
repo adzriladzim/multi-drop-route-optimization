@@ -16,7 +16,7 @@ from typing import List, Optional
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-from graph import DeliveryGraph
+from src.graph import DeliveryGraph
 
 
 def plot_locations(g: DeliveryGraph, title: str = "Peta Depot & Titik Pengiriman"):
@@ -151,7 +151,7 @@ def plot_distance_heatmap(g: DeliveryGraph, title: str = "Heatmap Matriks Jarak 
 
 
 if __name__ == "__main__":
-    from graph import build_graph_from_csv
+    from src.graph import build_graph_from_csv
 
     g = build_graph_from_csv("../data/raw/locations.csv")
 
